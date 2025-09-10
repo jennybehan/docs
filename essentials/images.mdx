@@ -4,45 +4,133 @@ description: "Add image, video, and other HTML elements"
 icon: "image"
 ---
 
-<img
-  style={{ borderRadius:"0.5rem" }}
-  src="https://mintlify-assets.b-cdn.net/bigbend.jpg"
-/>
+TACAlization
+상품 정보를 LLM이 분석하여 자동으로 TACA(Toss Amazing Catalog) 이름을 생성하고, 유사 상품끼리 묶는 AI 기반의 카탈로그화 작업입니다. TACAlization과 상품 소재 검수는 병렬로 진행됩니다.
 
-## Image
+실패
 
-### Using Markdown
+점수 = 5
 
-The [markdown syntax](https://www.markdownguide.org/basic-syntax/#images) lets you add images using the following code
+점수 < 5
 
-Note that the image file size must be less than 5MB. Otherwise, we recommend hosting on a service like [Cloudinary](https://cloudinary.com/) or [S3](https://aws.amazon.com/s3/). You can then use that URL and embed.
+예
 
-```md
-![title](/path/image.jpg)
+아니오
+
+AI
+
+승인
+
+거부
+
+CUSTOM
+
+DEFAULT
+
+성공
+
+TacalizationsResultConsumer
+
+응답 수신
+
+AI 분석
+결과 검증
+
+점수 기반 분기
+
+TacalizationConsumer
+
+이벤트 수신
+
+상품 필터링
+
+Tacalization
+Message 생성
+
+상품 검증
+완료
+
+TACA
+Titling
+
+배치 처리
+AiTacaJob
+
+AI 신뢰도
+점수
+
+동일 TACA
+존재?
+
+모니터링
+
+TACA
+합치기
+
+TACA
+생성
+
+TACA
+Table
+
+TACA
+생성
+
+셀러에게 반환
+
+
+상품 검증이 완료되면 DEFAULT 타입의 TACA가 생성됩니다.
+DEFAULT 타입의 타카는 서비스 대상이 아니기 때문에 사용자에게 노출될 수 없습니다.
+TACA는 product_item_group 테이블(TACA 테이블)에 생성됩니다.
+아이템은 product_item 테이블에 생성되고, product_item_group_id(=taca_id) 칼럼으로 TACA와 연결됩니다.
+AI로 생성되는 TACA는 타입이 AI, 수동 생성되는 TACA는 CUSTOM타입이 됩니다. AI, CUSTOM 타입의 TACA는 서비스 대상입니다.
+
+PIG vs. TACA
+
+TACA 체계 이전에는 Product Item Group(PIG) 체계가 있었어요. 따라서 코드 레벨에서는 아직 PIG, TACA 개념이 혼재되어 있고, product_item_group 테이블이 하나의 예시입니다.
+
+product ⇒ 상품 테이블
+product_item ⇒ 아이템(옵션) 테이블
+product_item_group ⇒ TACA 테이블
+product_item_group_id ⇒ taca_id
+
+1. TACAlization 트리거
+상품 검수가 완료되면 TACAlization 프로세스가 시작됩니다. TacalizationConsumer에서 트리거 과정을 담당합니다.
+
+완료 이벤트 수신
+Kafka를 통해 상품 검수 완료 이벤트(PRODUCT_INSPECT_COMPLETED_TASK)를 수신합니다.
+
+```
+// TacalizationConsumer.kt - 이벤트 수신 및 처리 시작
+override fun handleMessage(data: ConsumerRecord<String, ProductInspectorStatusSyncTask>) {
+    when (data.headers().get(EventHeader.EVENT_TYPE)) {
+        ProductEventTypeHeader.PRODUCT_INSPECT_COMPLETED_TASK -> {
+            val productId = data.value().productId
+            logger.info { "[TacalizationConsumer] 검수 완료 이벤트 수신: productId=$productId" }
+            processTacalization(productId)  // 여기서 실제 TACAlization 처리 시작
+        }
+    }
+}
 ```
 
-### Using Embeds
+처리 대상 필터링
+상품 검수 완료 이벤트를 수신했다고 모든 상품이 TACAlization 대상이 되는 것은 아닙니다. 컨슈머에서 processTacalization() 메서드를 호출해서 TACAlization 할 수 없는 상품을 필터링하는 과정을 거쳐 실제 처리 대상을 결정합니다.
 
-To get more customizability with images, you can also use [embeds](/writing-content/embed) to add images
+필터링하는 기준은 다음과 같습니다.
 
-```html
-<img height="200" src="/path/image.jpg" />
-```
+조건	설명	확인 방법
+상품 존재	상품이 삭제되지 않고 활성 상태	product.isRemoved() == false
+아이템 존재	상품에 연결된 ProductItem이 존재	itemEntities.isNotEmpty()
+TACA 존재	아이템에 연결된 TACA가 존재	tacaEntities.isNotEmpty()
+DEFAULT 타입	AI가 처리하지 않은 원본 TACA 존재	tacaEntities.any { it.type == ProductItemGroupType.DEFAULT }
+미처리 상태	아직 모니터링되지 않은 아이템	monitoringStatus != NOT_MONITORED
 
-## Embeds and HTML elements
+TACAlization 메시지 전송
+앞선 필터링 과정을 통과한 상품은 이제 실제 AI 분석을 위한 준비 단계에 들어갑니다. 상품 필터링이 완료된 후, AI가 분석할 수 있는 형태의 데이터를 수집하고 TacalizationMessage를 생성합니다. TacalizationMessage를 Kafka 토픽으로 전송하면, TACA Titling AI 시스템이 이 메시지를 수신하여 분석합니다.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/4KzFe50RQkQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style={{ width:"100%",borderRadius:"0.5rem" }} />
+메시지에는 AI가 TACA 이름을 생성하는 데 필요한 모든 정보가 포함되고 크기는 1MB 제한이 있습니다.
 
-<br />
-
-<Tip>
-  Mintlify supports [HTML tags in Markdown](https://www.markdownguide.org/basic-syntax/#html). This is helpful if you prefer HTML tags to Markdown syntax, and lets you create documentation with infinite flexibility.
-</Tip>
-
-### iFrames
-
-Loads another HTML page within the document. Most commonly used for embedding videos.
-
-```html
-<iframe src="https://www.youtube.com/embed/4KzFe50RQkQ"> </iframe>
-```
+상품 기본 정보: 상품명, 브랜드, 카테고리
+상품 옵션: 색상, 사이즈 등 판매 옵션 정보
+상품 이미지: 썸네일 및 상세 이미지 URL
+상품 고시: 품질보증 기준 등 법적 고시 정보
