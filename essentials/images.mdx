@@ -1,6 +1,7 @@
 ---
 title: "Images and Embeds"
-description: "Add image, video, and other HTML elements"
+description: "
+Add image, video, and other HTML elements"
 icon: "image"
 ---
 
@@ -11,7 +12,7 @@ TACAlization
 
 점수 = 5
 
-점수 < 5
+점수 \< 5
 
 예
 
@@ -78,7 +79,6 @@ TACA
 
 셀러에게 반환
 
-
 상품 검증이 완료되면 DEFAULT 타입의 TACA가 생성됩니다.
 DEFAULT 타입의 타카는 서비스 대상이 아니기 때문에 사용자에게 노출될 수 없습니다.
 TACA는 product_item_group 테이블(TACA 테이블)에 생성됩니다.
@@ -95,7 +95,7 @@ product_item_group ⇒ TACA 테이블
 product_item_group_id ⇒ taca_id
 
 1. TACAlization 트리거
-상품 검수가 완료되면 TACAlization 프로세스가 시작됩니다. TacalizationConsumer에서 트리거 과정을 담당합니다.
+   상품 검수가 완료되면 TACAlization 프로세스가 시작됩니다. TacalizationConsumer에서 트리거 과정을 담당합니다.
 
 완료 이벤트 수신
 Kafka를 통해 상품 검수 완료 이벤트(PRODUCT_INSPECT_COMPLETED_TASK)를 수신합니다.
@@ -122,7 +122,7 @@ override fun handleMessage(data: ConsumerRecord<String, ProductInspectorStatusSy
 상품 존재	상품이 삭제되지 않고 활성 상태	product.isRemoved() == false
 아이템 존재	상품에 연결된 ProductItem이 존재	itemEntities.isNotEmpty()
 TACA 존재	아이템에 연결된 TACA가 존재	tacaEntities.isNotEmpty()
-DEFAULT 타입	AI가 처리하지 않은 원본 TACA 존재	tacaEntities.any { it.type == ProductItemGroupType.DEFAULT }
+DEFAULT 타입	AI가 처리하지 않은 원본 TACA 존재	tacaEntities.any  it.type == ProductItemGroupType.DEFAULT 
 미처리 상태	아직 모니터링되지 않은 아이템	monitoringStatus != NOT_MONITORED
 
 TACAlization 메시지 전송
